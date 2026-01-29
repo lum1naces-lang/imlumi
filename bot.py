@@ -36,7 +36,7 @@ RESPONSES = {
     "сиси добрый вечер": "Вечер.. снова ты..",
     "сиси привет": "Опять ты.. чего надо?",
     "привет сиси": "Ну привет.. что теперь?",
-    "пицца": "🍕 Держи пиццу!",
+    "пицца": "",  # Пустая строка, так как будем отправлять только гифку
 }
 
 # ===================== СИСТЕМА РАНГОВ =====================
@@ -58,17 +58,13 @@ def is_moderator_or_higher(user_id):
 
 # ===================== КОМАНДА ПИЦЦЫ =====================
 async def команда_пицца(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда 'пицца' - отправляет гифку с пиццей"""
+    """Команда 'пицца' - отправляет гифку с пиццей БЕЗ ПОДПИСИ"""
     try:
-        # Отправляем гифку с пиццей
+        # Отправляем гифку с пиццей БЕЗ ПОДПИСИ
         await update.message.reply_animation(
             animation=PIZZA_GIF,
-            caption="🍕 Вот пицца! Приятного аппетита!",
             quote=True
         )
-        
-        # Можно удалить команду "пицца" (опционально)
-        # await update.message.delete()
         
         print(f"🍕 Отправил пиццу пользователю {update.message.from_user.first_name}")
         
@@ -235,29 +231,42 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text_clean in RESPONSES:
         response = RESPONSES[text_clean]
         
-        # Особый случай: если написали "пицца" - отправляем гифку
+        # Особый случай: если написали "пицца" - отправляем ТОЛЬКО гифку
         if text_clean == "пицца":
             try:
                 await update.message.reply_animation(
                     animation=PIZZA_GIF,
-                    caption="🍕 Вот пицца! Приятного аппетита!",
                     quote=True
                 )
                 print(f"🍕 Отправил пиццу по запросу 'пицца'")
                 return
             except:
-                pass  # Если не получилось отправить гифку, отправим текст
+                # Если не получилось отправить гифку
+                await update.message.reply_text("❌ Не удалось отправить пиццу...", quote=True)
+                return
         
-        await update.message.reply_text(
-            response,
-            parse_mode='Markdown' if text_clean == "правила" else None,
-            quote=True
-        )
+        # Для всех остальных ответов отправляем текст
+        if response:  # Только если есть текст для ответа
+            await update.message.reply_text(
+                response,
+                parse_mode='Markdown' if text_clean == "правила" else None,
+                quote=True
+            )
         return
     
     if text in RESPONSES:
-        await update.message.reply_text(RESPONSES[text], quote=True)
-        return
+        response = RESPONSES[text]
+        if response and text == "пицца":
+            try:
+                await update.message.reply_animation(
+                    animation=PIZZA_GIF,
+                    quote=True
+                )
+                print(f"🍕 Отправил пиццу по запросу 'пицца'")
+            except:
+                await update.message.reply_text("❌ Не удалось отправить пиццу...", quote=True)
+        elif response:
+            await update.message.reply_text(response, quote=True)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 Работаю")
