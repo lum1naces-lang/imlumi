@@ -56,6 +56,43 @@ def is_head_admin_or_higher(user_id):
 def is_moderator_or_higher(user_id):
     return has_permission(user_id, "moderator")
 
+# ===================== КОМАНДА ИНФОФЛУД =====================
+async def команда_инфофлуд(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда '.инфофлуд' - показывает статистику чата"""
+    try:
+        chat_id = update.message.chat_id
+        
+        # Получаем информацию о чате
+        chat = await context.bot.get_chat(chat_id)
+        
+        # Получаем список участников
+        all_members_count = chat.get_member_count()
+        
+        # Считаем ботов (упрощенно)
+        # Можно было бы перебрать всех участников, но это долго для больших чатов
+        # Для точного подсчета нужны права администратора
+        
+        # Отправляем сообщение со статистикой
+        message = (
+            f"<b>📊 Информация о чате</b>\n\n"
+            f"👥 <b>Участники:</b> {all_members_count}\n"
+            f"🤖 <b>Боты:</b> {1} (примерно)\n"
+            f"🔗 <b>Ссылка на</b> <a href='https://t.me/lunacyyflood'>инфо</a>"
+        )
+        
+        await update.message.reply_text(
+            message,
+            parse_mode='HTML',
+            quote=True,
+            disable_web_page_preview=True
+        )
+        
+        print(f"📊 Отправил инфофлуд для чата {chat.title}")
+        
+    except Exception as e:
+        print(f"❌ Ошибка в команде инфофлуд: {e}")
+        await update.message.reply_text("❌ Не удалось получить информацию о чате...")
+
 # ===================== КОМАНДА ПИЦЦЫ =====================
 async def команда_пицца(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда 'пицца' - отправляет гифку с пиццей БЕЗ ПОДПИСИ"""
@@ -295,6 +332,9 @@ def main():
             app.add_handler(MessageHandler(filters.Regex(r'^\.пинг$'), команда_пинг))
             app.add_handler(MessageHandler(filters.Regex(r'^\+кик'), команда_кик))
             
+            # Команда инфофлуд
+            app.add_handler(MessageHandler(filters.Regex(r'^\.инфофлуд$'), команда_инфофлуд))
+            
             # Команды рангов
             app.add_handler(MessageHandler(filters.Regex(r'^\+сс'), команда_плюс_сс))
             app.add_handler(MessageHandler(filters.Regex(r'^\+глсс'), команда_плюс_глсс))
@@ -313,6 +353,7 @@ def main():
             
             print("🔥 БОТ ЗАПУЩЕН И РАБОТАЕТ!")
             print("🎯 Команды: .дел .пинг +кик +сс -сс +глсс .садм .салл")
+            print("📊 Команда: .инфофлуд")
             print("🍕 Пицца: просто напиши 'пицца' или '.пицца'")
             print("\nОжидаю сообщения...\n")
             
