@@ -9,16 +9,15 @@ from telegram.ext import Application, MessageHandler, filters, CommandHandler, C
 # ===================== НАСТРОЙКИ =====================
 TOKEN = os.environ.get("TOKEN")
 if not TOKEN:
-    print("❌ НЕТ ТОКЕНА! Добавь переменную TOKEN в Railway → Variables")
+    print("❌ НЕТ ТОКЕНА! Добавь переменную TOKEN")
     exit()
 
-CREATOR_ID = 7416252489  # Замени на свой ID
+CREATOR_ID = 7416252489  # ЗАМЕНИ НА СВОЙ ID!
 
 # ===================== ХРАНИЛИЩА =====================
-user_ranks = {
-    CREATOR_ID: "creator"
-}
+user_ranks = {CREATOR_ID: "creator"}
 
+# Автоответы - реагируют только на ТОЧНОЕ совпадение всего сообщения
 RESPONSES = {
     "правила": "📜 С правилами можно ознакомиться [туть](https://telegra.ph/Rules-01-24-146)",
     "сиси": "Ну, привет... опять ты появляешься. Что на этот раз?",
@@ -27,70 +26,17 @@ RESPONSES = {
     "кто такой этот ваш луми": "АХХ..луми..мой создатель",
     "луми": "Мхх..",
     "бот": "Ну чего тебе?",
+    "Сиси доброй ночи": "Спи или не спи… всё равно ничего не  закончится.",
+    "Сиси доброе утро": "Что в этом утре особенного.."
 }
 
-# ===================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
-def extract_target_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Извлекает целевого пользователя из:
-    1. Ответа на сообщение
-    2. Упоминания @username в тексте
-    3. Указания ID в тексте
-    Возвращает (user_id, username) или (None, None)
-    """
-    message = update.message
-    text = message.text if message.text else ""
-    
-    # 1. Проверяем ответ на сообщение
-    if message.reply_to_message:
-        target = message.reply_to_message.from_user
-        return target.id, target.username
-    
-    # 2. Ищем упоминания @username в тексте
-    username_match = re.search(r'@([a-zA-Z0-9_]{5,})', text)
-    if username_match:
-        username = username_match.group(1)
-        # Здесь username, но нужно получить user_id
-        # Будем возвращать username, а user_id получим позже
-        return None, username
-    
-    # 3. Ищем ID в тексте (только цифры после команды)
-    id_match = re.search(r'(?<!\d)(\d{8,})(?!\d)', text)
-    if id_match:
-        user_id = int(id_match.group(1))
-        return user_id, None
-    
-    return None, None
-
-async def resolve_user_id(context: ContextTypes.DEFAULT_TYPE, user_id: int = None, username: str = None):
-    """Получает полную информацию о пользователе по ID или username"""
-    if user_id:
-        try:
-            user = await context.bot.get_chat(user_id)
-            return user.id, user.username, user.first_name
-        except:
-            return user_id, None, f"User {user_id}"
-    
-    if username:
-        # Пытаемся получить информацию через поиск
-        try:
-            # Если username есть в чате
-            members = await context.bot.get_chat_administrators(update.effective_chat.id)
-            for member in members:
-                if member.user.username and member.user.username.lower() == username.lower():
-                    return member.user.id, member.user.username, member.user.first_name
-        except:
-            pass
-        
-        # Если не нашли, возвращаем как есть
-        return None, username, f"@{username}"
-    
-    return None, None, None
-
+# ===================== СИСТЕМА РАНГОВ =====================
 def get_rank(user_id):
+    """Получает ранг пользователя"""
     return user_ranks.get(user_id, "user")
 
 def has_permission(user_id, required_rank):
+    """Проверяет, имеет ли пользователь достаточный ранг"""
     rank_hierarchy = {
         "user": 0,
         "moderator": 1,
@@ -101,17 +47,63 @@ def has_permission(user_id, required_rank):
     return rank_hierarchy.get(user_rank, 0) >= rank_hierarchy.get(required_rank, 0)
 
 def is_creator(user_id):
+    """Проверяет, является ли пользователь создателем"""
     return get_rank(user_id) == "creator"
 
 def is_head_admin_or_higher(user_id):
+    """Проверяет, является ли пользователь главным админом или выше"""
     return has_permission(user_id, "head_admin")
 
 def is_moderator_or_higher(user_id):
+    """Проверяет, является ли пользователь модератором или выше"""
     return has_permission(user_id, "moderator")
 
-# ===================== ОБНОВЛЕННЫЕ КОМАНДЫ =====================
+# ===================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
+async def get_user_from_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Получает пользователя из:
+    1. Ответа на сообщение
+    2. @username в тексте
+    3. ID в тексте
+    Возвращает (user_id, username, display_name)
+    """
+    message = update.message
+    
+    # 1. Ответ на сообщение
+    if message.reply_to_message:
+        user = message.reply_to_message.from_user
+        return user.id, user.username, user.first_name
+    
+    text = message.text or ""
+    
+    # 2. @username в тексте
+    if '@' in text:
+        match = re.search(r'@([a-zA-Z0-9_]{5,})', text)
+        if match:
+            username = match.group(1)
+            try:
+                # Пробуем получить информацию о пользователе
+                user = await context.bot.get_chat(f"@{username}")
+                return user.id, user.username, user.first_name
+            except:
+                # Если не получается, возвращаем что есть
+                return None, username, f"@{username}"
+    
+    # 3. ID в тексте (цифры от 9 символов)
+    match = re.search(r'(\d{9,})', text)
+    if match:
+        user_id = int(match.group(1))
+        try:
+            user = await context.bot.get_chat(user_id)
+            return user.id, user.username, user.first_name
+        except:
+            return user_id, None, f"ID {user_id}"
+    
+    return None, None, None
+
+# ===================== КОМАНДЫ МОДЕРАЦИИ =====================
 async def команда_дел(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда .дел - удалить сообщение"""
+    """Команда .дел - удалить сообщение (только по ответу)"""
     if not is_moderator_or_higher(update.message.from_user.id):
         await update.message.delete()
         return
@@ -121,8 +113,12 @@ async def команда_дел(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_to_message.delete()
             await update.message.delete()
             print(f"🗑️ Удалил сообщение от {update.message.reply_to_message.from_user.first_name}")
-        except:
-            await update.message.reply_text("❌ Не могу удалить сообщение!")
+        except Exception as e:
+            print(f"❌ Ошибка удаления: {e}")
+            try:
+                await update.message.reply_text("❌ Не могу удалить сообщение!")
+            except:
+                pass
     else:
         await update.message.reply_text("❌ Ответьте на сообщение для удаления!")
         await update.message.delete()
@@ -134,9 +130,10 @@ async def команда_пинг(update: Update, context: ContextTypes.DEFAULT_
         return
     
     start_time = time.time()
-    msg = await update.message.reply_text("🏓 Измеряю пинг...")
+    sent_message = await update.message.reply_text("🏓 Измеряю пинг...")
     end_time = time.time()
-    await msg.edit_text(f"🏓 Пинг: {round((end_time - start_time) * 1000, 2)}мс")
+    ping_ms = round((end_time - start_time) * 1000, 2)
+    await sent_message.edit_text(f"🏓 Пинг бота: {ping_ms}мс")
 
 async def команда_кик(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда +кик - исключить пользователя"""
@@ -144,43 +141,42 @@ async def команда_кик(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.delete()
         return
     
-    # Получаем целевого пользователя
-    user_id, username = extract_target_user(update, context)
-    if not user_id and not username:
+    user_id, username, display_name = await get_user_from_message(update, context)
+    
+    if not user_id:
         await update.message.reply_text("❌ Укажите пользователя: ответьте на сообщение, @username или ID")
         await update.message.delete()
         return
     
-    # Разрешаем user_id
-    target_id, target_username, target_name = await resolve_user_id(context, user_id, username)
-    if not target_id:
-        await update.message.reply_text(f"❌ Не могу найти пользователя {username}")
-        await update.message.delete()
-        return
-    
-    # Проверка прав
-    if is_creator(target_id):
+    # Проверки безопасности
+    if is_creator(user_id):
         await update.message.reply_text("❌ Нельзя кикать создателя!")
         await update.message.delete()
         return
     
-    if has_permission(target_id, get_rank(update.message.from_user.id)):
+    if has_permission(user_id, get_rank(update.message.from_user.id)):
         await update.message.reply_text("❌ Нельзя кикать пользователя с равным или высшим рангом!")
         await update.message.delete()
         return
     
-    # Выполняем кик
+    # Выполнение кика
     try:
         await context.bot.ban_chat_member(
             chat_id=update.message.chat_id,
-            user_id=target_id,
+            user_id=user_id,
             until_date=datetime.now() + timedelta(seconds=30)
         )
-        await context.bot.unban_chat_member(update.message.chat_id, target_id)
-        await update.message.reply_text(f"🚪 {target_name} был исключен из группы!")
-        print(f"🚪 Кикнул: {target_name} (ID: {target_id})")
+        await context.bot.unban_chat_member(update.message.chat_id, user_id)
+        
+        await update.message.reply_text(f"🚪 {display_name} был исключен из группы!")
+        print(f"🚪 Кикнул пользователя: {display_name} (ID: {user_id})")
+        
     except Exception as e:
-        await update.message.reply_text(f"❌ Ошибка: {str(e)[:100]}")
+        error_msg = str(e).lower()
+        if "not enough rights" in error_msg or "administrator" in error_msg:
+            await update.message.reply_text("❌ У бота нет прав на исключение!")
+        else:
+            await update.message.reply_text(f"❌ Ошибка: {str(e)[:100]}")
 
 async def команда_плюс_сс(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда +сс - назначить модератором"""
@@ -188,35 +184,28 @@ async def команда_плюс_сс(update: Update, context: ContextTypes.DEF
         await update.message.delete()
         return
     
-    # Получаем целевого пользователя
-    user_id, username = extract_target_user(update, context)
-    if not user_id and not username:
+    user_id, username, display_name = await get_user_from_message(update, context)
+    
+    if not user_id:
         await update.message.reply_text("❌ Укажите пользователя: ответьте на сообщение, @username или ID")
         await update.message.delete()
         return
     
-    # Разрешаем user_id
-    target_id, target_username, target_name = await resolve_user_id(context, user_id, username)
-    if not target_id:
-        await update.message.reply_text(f"❌ Не могу найти пользователя {username}")
-        await update.message.delete()
-        return
-    
     # Проверки
-    if is_creator(target_id):
+    if is_creator(user_id):
         await update.message.reply_text("❌ Нельзя изменять ранг создателя!")
         await update.message.delete()
         return
     
-    if has_permission(target_id, get_rank(update.message.from_user.id)):
+    if has_permission(user_id, get_rank(update.message.from_user.id)):
         await update.message.reply_text("❌ Нельзя назначать ранг пользователю с равным или высшим рангом!")
         await update.message.delete()
         return
     
-    # Назначаем модератором
-    user_ranks[target_id] = "moderator"
-    await update.message.reply_text(f"✅ {target_name} назначен Модератором!")
-    print(f"👤 Назначен модератор: {target_name} (ID: {target_id})")
+    # Назначение модератором
+    user_ranks[user_id] = "moderator"
+    await update.message.reply_text(f"✅ {display_name} назначен Модератором!")
+    print(f"👤 Назначен модератор: {display_name} (ID: {user_id})")
 
 async def команда_плюс_глсс(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда +глсс - назначить главным админом"""
@@ -224,30 +213,23 @@ async def команда_плюс_глсс(update: Update, context: ContextTypes
         await update.message.delete()
         return
     
-    # Получаем целевого пользователя
-    user_id, username = extract_target_user(update, context)
-    if not user_id and not username:
+    user_id, username, display_name = await get_user_from_message(update, context)
+    
+    if not user_id:
         await update.message.reply_text("❌ Укажите пользователя: ответьте на сообщение, @username или ID")
         await update.message.delete()
         return
     
-    # Разрешаем user_id
-    target_id, target_username, target_name = await resolve_user_id(context, user_id, username)
-    if not target_id:
-        await update.message.reply_text(f"❌ Не могу найти пользователя {username}")
-        await update.message.delete()
-        return
-    
     # Проверки
-    if is_creator(target_id):
+    if is_creator(user_id):
         await update.message.reply_text("❌ Это создатель!")
         await update.message.delete()
         return
     
-    # Назначаем главным админом
-    user_ranks[target_id] = "head_admin"
-    await update.message.reply_text(f"✅ {target_name} назначен Главным Администратором!")
-    print(f"👑 Назначен главный админ: {target_name} (ID: {target_id})")
+    # Назначение главным админом
+    user_ranks[user_id] = "head_admin"
+    await update.message.reply_text(f"✅ {display_name} назначен Главным Администратором!")
+    print(f"👑 Назначен главный админ: {display_name} (ID: {user_id})")
 
 async def команда_минус_сс(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда -сс - снять ранг"""
@@ -255,39 +237,32 @@ async def команда_минус_сс(update: Update, context: ContextTypes.D
         await update.message.delete()
         return
     
-    # Получаем целевого пользователя
-    user_id, username = extract_target_user(update, context)
-    if not user_id and not username:
+    user_id, username, display_name = await get_user_from_message(update, context)
+    
+    if not user_id:
         await update.message.reply_text("❌ Укажите пользователя: ответьте на сообщение, @username или ID")
         await update.message.delete()
         return
     
-    # Разрешаем user_id
-    target_id, target_username, target_name = await resolve_user_id(context, user_id, username)
-    if not target_id:
-        await update.message.reply_text(f"❌ Не могу найти пользователя {username}")
-        await update.message.delete()
-        return
-    
     # Проверки
-    if is_creator(target_id):
+    if is_creator(user_id):
         await update.message.reply_text("❌ Нельзя изменять ранг создателя!")
         await update.message.delete()
         return
     
-    if has_permission(target_id, get_rank(update.message.from_user.id)):
+    if has_permission(user_id, get_rank(update.message.from_user.id)):
         await update.message.reply_text("❌ Нельзя снимать ранг пользователю с равным или высшим рангом!")
         await update.message.delete()
         return
     
-    # Снимаем ранг
-    if target_id in user_ranks:
-        old_rank = user_ranks[target_id]
-        del user_ranks[target_id]
-        await update.message.reply_text(f"✅ С {target_name} снят ранг ({old_rank})!")
-        print(f"🗑️ Снят ранг: {target_name} (ID: {target_id}), был: {old_rank}")
+    # Снятие ранга
+    if user_id in user_ranks:
+        old_rank = user_ranks[user_id]
+        del user_ranks[user_id]
+        await update.message.reply_text(f"✅ С {display_name} снят ранг ({old_rank})!")
+        print(f"🗑️ Снят ранг у: {display_name} (ID: {user_id}), был: {old_rank}")
     else:
-        await update.message.reply_text(f"⚠️ {target_name} не имеет ранга!")
+        await update.message.reply_text(f"⚠️ {display_name} не имеет ранга!")
         await update.message.delete()
 
 async def команда_садм(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -296,10 +271,11 @@ async def команда_садм(update: Update, context: ContextTypes.DEFAULT_
         await update.message.delete()
         return
     
-    if len(user_ranks) <= 1:
+    if len(user_ranks) <= 1:  # Только создатель
         await update.message.reply_text("👑 Есть только Создатель!")
         return
     
+    # Сортируем по рангам
     rank_order = {"creator": 0, "head_admin": 1, "moderator": 2}
     sorted_users = sorted(
         [(uid, rank) for uid, rank in user_ranks.items() if uid != CREATOR_ID],
@@ -316,12 +292,19 @@ async def команда_садм(update: Update, context: ContextTypes.DEFAULT_
     except:
         text += f"👑 Создатель: ID {CREATOR_ID}\n\n"
     
-    # Остальные
+    # Остальные ранги
     for user_id, rank in sorted_users:
         try:
             user = await context.bot.get_chat(user_id)
             username = f"@{user.username}" if user.username else "нет @"
-            rank_name = "👑 Администратор" if rank == "head_admin" else "⚡ Модератор"
+            
+            if rank == "head_admin":
+                rank_name = "👑 Администратор"
+            elif rank == "moderator":
+                rank_name = "⚡ Модератор"
+            else:
+                rank_name = rank
+            
             text += f"{rank_name}: {user.first_name} {username}\n"
         except:
             text += f"{rank}: ID {user_id}\n"
@@ -329,74 +312,95 @@ async def команда_садм(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(text)
 
 async def команда_салл(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда .салл - снять ВСЕ ранги"""
+    """Команда .салл - снять ВСЕ ранги (кроме создателя)"""
     if not is_creator(update.message.from_user.id):
         await update.message.delete()
         return
     
-    removed_count = len(user_ranks) - 1
-    user_ranks.clear()
-    user_ranks[CREATOR_ID] = "creator"
+    # Сохраняем создателя
+    saved_creator = {CREATOR_ID: "creator"}
     
-    await update.message.reply_text(f"✅ Сняты все ранги! Удалено: {removed_count}")
+    # Считаем сколько было админов/модераторов
+    removed_count = len(user_ranks) - 1  # Минус создатель
+    
+    # Оставляем только создателя
+    user_ranks.clear()
+    user_ranks.update(saved_creator)
+    
+    await update.message.reply_text(f"✅ Сняты все ранги! Удалено: {removed_count} пользователей")
     print(f"🔥 Сняты все ранги, остался только создатель")
 
+# ===================== АВТООТВЕТЫ =====================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка обычных сообщений"""
+    """Обработка сообщений - только ТОЧНОЕ совпадение всего сообщения"""
     text = update.message.text.lower().strip()
     
-    for keyword, response in RESPONSES.items():
-        if ' ' not in keyword:
-            if keyword in text.split():
-                await update.message.reply_text(
-                    response,
-                    parse_mode='Markdown' if keyword == "правила" else None
-                )
-                return
-        else:
-            if keyword in text:
-                await update.message.reply_text(
-                    response,
-                    parse_mode='Markdown' if keyword == "правила" else None
-                )
-                return
+    # Проверяем точное совпадение (регистр не важен)
+    if text in RESPONSES:
+        await update.message.reply_text(
+            RESPONSES[text],
+            parse_mode='Markdown' if text == "правила" else None
+        )
+        return
+    
+    # Можно добавить вариант с игнорированием знаков препинания
+    # text_clean = text.rstrip('?!.,;:')
+    # if text_clean in RESPONSES:
+    #     await update.message.reply_text(RESPONSES[text_clean])
+    #     return
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 Работаю")
+    """Команда /start"""
+    await update.message.reply_text("Работаю")
 
-# ===================== ЗАПУСК =====================
+# ===================== ЗАПУСК БОТА =====================
 def main():
+    """Запуск бота"""
     print("=" * 50)
     print("🤖 БОТ ЗАПУСКАЕТСЯ")
     print("=" * 50)
     
     if not TOKEN:
-        print("❌ НЕТ ТОКЕНА! Добавь переменную TOKEN")
+        print("❌ НЕТ ТОКЕНА! Добавь переменную TOKEN в Railway → Variables")
         return
     
-    app = Application.builder().token(TOKEN).build()
+    print(f"📦 Загружено {len(RESPONSES)} автоответов (точное совпадение)")
+    print(f"👑 Создатель ID: {CREATOR_ID}")
+    print("ℹ️ Автоответы сработают только если ВСЁ сообщение равно ключевому слову")
     
-    # ОБНОВЛЕННЫЕ КОМАНДЫ - работают и по ответу, и по @username, и по ID
-    app.add_handler(MessageHandler(filters.Regex(r'^\.дел$'), команда_дел))
-    app.add_handler(MessageHandler(filters.Regex(r'^\.пинг$'), команда_пинг))
-    app.add_handler(MessageHandler(filters.Regex(r'^\+кик(\s+.*)?$'), команда_кик))
-    app.add_handler(MessageHandler(filters.Regex(r'^\+сс(\s+.*)?$'), команда_плюс_сс))
-    app.add_handler(MessageHandler(filters.Regex(r'^\+глсс(\s+.*)?$'), команда_плюс_глсс))
-    app.add_handler(MessageHandler(filters.Regex(r'^\-сс(\s+.*)?$'), команда_минус_сс))
-    app.add_handler(MessageHandler(filters.Regex(r'^\.садм$'), команда_садм))
-    app.add_handler(MessageHandler(filters.Regex(r'^\.салл$'), команда_салл))
-    
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    print("🔥 БОТ ЗАПУЩЕН И РАБОТАЕТ!")
-    print("📌 Команды работают:")
-    print("   1. По ответу на сообщение")
-    print("   2. По @username: +кик @username")
-    print("   3. По ID: +сс 123456789")
-    print("\nОжидаю сообщения...\n")
-    
-    app.run_polling(drop_pending_updates=True)
+    # Бесконечный цикл с переподключением
+    while True:
+        try:
+            app = Application.builder().token(TOKEN).build()
+            
+            # КОМАНДЫ МОДЕРАЦИИ
+            app.add_handler(MessageHandler(filters.Regex(r'^\.дел$'), команда_дел))
+            app.add_handler(MessageHandler(filters.Regex(r'^\.пинг$'), команда_пинг))
+            app.add_handler(MessageHandler(filters.Regex(r'^\+кик'), команда_кик))
+            
+            # КОМАНДЫ УПРАВЛЕНИЯ РАНГАМИ
+            app.add_handler(MessageHandler(filters.Regex(r'^\+сс'), команда_плюс_сс))
+            app.add_handler(MessageHandler(filters.Regex(r'^\+глсс'), команда_плюс_глсс))
+            app.add_handler(MessageHandler(filters.Regex(r'^\-сс'), команда_минус_сс))
+            app.add_handler(MessageHandler(filters.Regex(r'^\.садм$'), команда_садм))
+            app.add_handler(MessageHandler(filters.Regex(r'^\.салл$'), команда_салл))
+            
+            # СТАНДАРТНЫЕ КОМАНДЫ
+            app.add_handler(CommandHandler("start", start_command))
+            app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+            
+            print("🔥 БОТ ЗАПУЩЕН И РАБОТАЕТ!")
+            print("🧭 Иерархия рангов: Создатель → Главный Админ → Модератор")
+            print("📌 Команды работают с: ответами, @username, ID")
+            print("🤖 Автоответы: только точное совпадение сообщения")
+            print("\nОжидаю сообщения...\n")
+            
+            app.run_polling(drop_pending_updates=True, close_loop=False)
+            
+        except Exception as e:
+            print(f"💥 Критическая ошибка: {e}")
+            print("🔄 Перезапуск через 10 секунд...")
+            time.sleep(10)
 
 if __name__ == "__main__":
     main()
