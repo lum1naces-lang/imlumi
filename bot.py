@@ -1,7 +1,6 @@
 import os
 import time
 import re
-import json
 import logging
 import requests
 from datetime import datetime, timedelta
@@ -16,115 +15,8 @@ if not TOKEN:
 
 CREATOR_ID = 7416252489  # ЗАМЕНИ НА СВОЙ ID!
 
-# ===================== ПЕРЕВОДЧИК =====================
-class SimpleTranslator:
-    """Простой переводчик через Яндекс API"""
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
-    
-    def detect_language(self, text):
-        """Определяем язык текста (простая логика)"""
-        # Проверяем кириллицу
-        cyrillic_chars = sum(1 for char in text if '\u0400' <= char <= '\u04FF')
-        # Проверяем латиницу
-        latin_chars = sum(1 for char in text.lower() if 'a' <= char <= 'z')
-        
-        if cyrillic_chars > latin_chars:
-            return 'ru'
-        elif latin_chars > cyrillic_chars:
-            return 'en'
-        else:
-            return 'auto'
-    
-    def translate(self, text, source_lang='auto', target_lang='en'):
-        """Перевод текста через публичный API"""
-        try:
-            # Публичный Яндекс Переводчик (работает без ключа с лимитами)
-            url = "https://translate.googleapis.com/translate_a/single"
-            
-            params = {
-                'client': 'gtx',
-                'sl': source_lang,
-                'tl': target_lang,
-                'dt': 't',
-                'q': text[:1000]  # Ограничиваем длину
-            }
-            
-            response = self.session.get(url, params=params, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data and len(data) > 0:
-                    translated_text = ''
-                    for item in data[0]:
-                        if item[0]:
-                            translated_text += item[0]
-                    
-                    return {
-                        'text': translated_text or text,
-                        'src': source_lang if source_lang != 'auto' else self.detect_language(text),
-                        'dest': target_lang
-                    }
-            
-            # Если не сработало, делаем простую эмуляцию перевода
-            return self._emulate_translation(text, source_lang, target_lang)
-            
-        except Exception as e:
-            print(f"⚠️ Ошибка перевода: {e}")
-            return self._emulate_translation(text, source_lang, target_lang)
-    
-    def _emulate_translation(self, text, source_lang, target_lang):
-        """Эмуляция перевода для теста"""
-        if source_lang == 'auto':
-            source_lang = self.detect_language(text)
-        
-        if source_lang == 'ru' and target_lang == 'en':
-            # Простая замена некоторых русских слов на английские (для теста)
-            replacements = {
-                'привет': 'hello',
-                'как дела': 'how are you',
-                'спасибо': 'thank you',
-                'да': 'yes',
-                'нет': 'no'
-            }
-            
-            translated = text.lower()
-            for ru, en in replacements.items():
-                translated = translated.replace(ru, en)
-            
-            if translated == text.lower():
-                translated = f"[EN] {text}"
-        elif source_lang == 'en' and target_lang == 'ru':
-            # Простая замена английских слов на русские
-            replacements = {
-                'hello': 'привет',
-                'hi': 'привет',
-                'how are you': 'как дела',
-                'thank you': 'спасибо',
-                'thanks': 'спасибо',
-                'yes': 'да',
-                'no': 'нет'
-            }
-            
-            translated = text.lower()
-            for en, ru in replacements.items():
-                translated = translated.replace(en, ru)
-            
-            if translated == text.lower():
-                translated = f"[RU] {text}"
-        else:
-            translated = f"[{target_lang.upper()}] {text}"
-        
-        return {
-            'text': translated,
-            'src': source_lang,
-            'dest': target_lang
-        }
-
-translator = SimpleTranslator()
+# ===================== ТВОЯ ГИФКА С ПИЦЦЕЙ =====================
+PIZZA_GIF = "https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExYjhiMjY4MjdwMm43cHY0MG9pcm54N24xdHFscXJiZGk2ZWFubzRlMiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Z3Dz0f7pNHns4/giphy.gif"
 
 # ===================== ХРАНИЛИЩА =====================
 user_ranks = {CREATOR_ID: "creator"}
@@ -144,7 +36,7 @@ RESPONSES = {
     "сиси добрый вечер": "Вечер.. снова ты..",
     "сиси привет": "Опять ты.. чего надо?",
     "привет сиси": "Ну привет.. что теперь?",
-    "мяу": "Мурр💕"
+    "пицца": "🍕 Держи пиццу!",
 }
 
 # ===================== СИСТЕМА РАНГОВ =====================
@@ -164,18 +56,36 @@ def is_head_admin_or_higher(user_id):
 def is_moderator_or_higher(user_id):
     return has_permission(user_id, "moderator")
 
+# ===================== КОМАНДА ПИЦЦЫ =====================
+async def команда_пицца(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда 'пицца' - отправляет гифку с пиццей"""
+    try:
+        # Отправляем гифку с пиццей
+        await update.message.reply_animation(
+            animation=PIZZA_GIF,
+            caption="🍕 Вот пицца! Приятного аппетита!",
+            quote=True
+        )
+        
+        # Можно удалить команду "пицца" (опционально)
+        # await update.message.delete()
+        
+        print(f"🍕 Отправил пиццу пользователю {update.message.from_user.first_name}")
+        
+    except Exception as e:
+        print(f"❌ Ошибка отправки пиццы: {e}")
+        await update.message.reply_text("❌ Не удалось отправить пиццу...")
+
 # ===================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====================
 async def get_user_from_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     
-    # 1. Ответ на сообщение
     if message.reply_to_message:
         user = message.reply_to_message.from_user
         return user.id, user.username, user.first_name
     
     text = message.text or ""
     
-    # 2. @username в тексте
     if '@' in text:
         match = re.search(r'@([a-zA-Z0-9_]{5,})', text)
         if match:
@@ -186,7 +96,6 @@ async def get_user_from_message(update: Update, context: ContextTypes.DEFAULT_TY
             except:
                 return None, username, f"@{username}"
     
-    # 3. ID в тексте
     match = re.search(r'(\d{9,})', text)
     if match:
         user_id = int(match.group(1))
@@ -198,59 +107,7 @@ async def get_user_from_message(update: Update, context: ContextTypes.DEFAULT_TY
     
     return None, None, None
 
-# ===================== ФУНКЦИЯ ПЕРЕВОДА =====================
-async def команда_переведи(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда .переведи или !переведи - перевод текста"""
-    if not is_moderator_or_higher(update.message.from_user.id):
-        await update.message.delete()
-        return
-    
-    if not update.message.reply_to_message or not update.message.reply_to_message.text:
-        await update.message.reply_text("❌ Ответьте на текстовое сообщение!")
-        await update.message.delete()
-        return
-    
-    text_to_translate = update.message.reply_to_message.text
-    
-    # Определяем язык исходного текста
-    source_lang = translator.detect_language(text_to_translate)
-    
-    # Определяем целевой язык (противоположный)
-    if source_lang == 'ru':
-        target_lang = 'en'
-        target_name = "английский"
-        source_name = "русский"
-    elif source_lang == 'en':
-        target_lang = 'ru'
-        target_name = "русский"
-        source_name = "английский"
-    else:
-        target_lang = 'ru'
-        target_name = "русский"
-        source_name = "другой"
-    
-    try:
-        # Переводим
-        translated = translator.translate(text_to_translate, source_lang, target_lang)
-        
-        # Формируем ответ
-        response = (
-            f"🌍 **Перевод**\n\n"
-            f"**С:** {source_name}\n"
-            f"**На:** {target_name}\n\n"
-            f"📝 **Оригинал:**\n`{text_to_translate[:200]}{'...' if len(text_to_translate) > 200 else ''}`\n\n"
-            f"✅ **Перевод:**\n`{translated['text'][:200]}{'...' if len(translated['text']) > 200 else ''}`"
-        )
-        
-        await update.message.reply_text(response, parse_mode='Markdown')
-        await update.message.delete()
-        
-    except Exception as e:
-        print(f"❌ Ошибка перевода: {e}")
-        await update.message.reply_text("❌ Не удалось перевести текст")
-        await update.message.delete()
-
-# ===================== ОСНОВНЫЕ КОМАНДЫ =====================
+# ===================== КОМАНДЫ МОДЕРАЦИИ =====================
 async def команда_дел(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_moderator_or_higher(update.message.from_user.id):
         await update.message.delete()
@@ -370,12 +227,29 @@ async def команда_салл(update: Update, context: ContextTypes.DEFAULT_
 
 # ===================== АВТООТВЕТЫ =====================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка сообщений"""
     text = update.message.text.lower().strip()
     text_clean = text.rstrip('?!.,;:')
     
+    # Проверяем на заготовленные ответы
     if text_clean in RESPONSES:
+        response = RESPONSES[text_clean]
+        
+        # Особый случай: если написали "пицца" - отправляем гифку
+        if text_clean == "пицца":
+            try:
+                await update.message.reply_animation(
+                    animation=PIZZA_GIF,
+                    caption="🍕 Вот пицца! Приятного аппетита!",
+                    quote=True
+                )
+                print(f"🍕 Отправил пиццу по запросу 'пицца'")
+                return
+            except:
+                pass  # Если не получилось отправить гифку, отправим текст
+        
         await update.message.reply_text(
-            RESPONSES[text_clean],
+            response,
             parse_mode='Markdown' if text_clean == "правила" else None,
             quote=True
         )
@@ -388,7 +262,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 Работаю")
 
-# ===================== ЗАПУСК =====================
+# ===================== ЗАПУСК БОТА =====================
 def main():
     print("=" * 50)
     print("🤖 БОТ ЗАПУСКАЕТСЯ")
@@ -400,7 +274,7 @@ def main():
     
     print(f"📦 Загружено {len(RESPONSES)} автоответов")
     print(f"👑 Создатель ID: {CREATOR_ID}")
-    print("🌍 Переводчик: ✅ работает")
+    print(f"🍕 Гифка пиццы: ✅ загружена")
     print("=" * 50)
     
     while True:
@@ -412,10 +286,6 @@ def main():
             app.add_handler(MessageHandler(filters.Regex(r'^\.пинг$'), команда_пинг))
             app.add_handler(MessageHandler(filters.Regex(r'^\+кик'), команда_кик))
             
-            # Команды переводчика
-            app.add_handler(MessageHandler(filters.Regex(r'^\.переведи$') & filters.REPLY, команда_переведи))
-            app.add_handler(MessageHandler(filters.Regex(r'^\!переведи$') & filters.REPLY, команда_переведи))
-            
             # Команды рангов
             app.add_handler(MessageHandler(filters.Regex(r'^\+сс'), команда_плюс_сс))
             app.add_handler(MessageHandler(filters.Regex(r'^\+глсс'), команда_плюс_глсс))
@@ -423,12 +293,18 @@ def main():
             app.add_handler(MessageHandler(filters.Regex(r'^\.садм$'), команда_садм))
             app.add_handler(MessageHandler(filters.Regex(r'^\.салл$'), команда_салл))
             
+            # Команда пиццы (можно вызывать разными способами)
+            app.add_handler(MessageHandler(filters.Regex(r'^пицца$'), команда_пицца))
+            app.add_handler(MessageHandler(filters.Regex(r'^\.пицца$'), команда_пицца))
+            app.add_handler(MessageHandler(filters.Regex(r'^!пицца$'), команда_пицца))
+            
             # Стандартные
             app.add_handler(CommandHandler("start", start_command))
             app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
             
             print("🔥 БОТ ЗАПУЩЕН И РАБОТАЕТ!")
-            print("🎯 Команды: .дел .пинг +кик +сс -сс +глсс .садм .салл .переведи")
+            print("🎯 Команды: .дел .пинг +кик +сс -сс +глсс .садм .салл")
+            print("🍕 Пицца: просто напиши 'пицца' или '.пицца'")
             print("\nОжидаю сообщения...\n")
             
             app.run_polling(drop_pending_updates=True)
