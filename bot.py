@@ -1,10 +1,19 @@
 import os
 import time
 import re
+import html
 import logging
 from datetime import datetime, timedelta
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ContextTypes
+
+try:
+    from googletrans import Translator, LANGUAGES
+    translator_available = True
+except ImportError:
+    print("⚠️ Библиотека 'googletrans' не установлена. Перевод недоступен.")
+    print("ℹ️ Добавь в requirements.txt: googletrans==4.0.0-rc1")
+    translator_available = False
 
 # ===================== НАСТРОЙКИ =====================
 TOKEN = os.environ.get("TOKEN")
@@ -104,6 +113,77 @@ async def get_user_from_message(update: Update, context: ContextTypes.DEFAULT_TY
             return user_id, None, f"ID {user_id}"
     
     return None, None, None
+
+# ===================== ФУНКЦИЯ ПЕРЕВОДА =====================
+async def команда_переведи(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда .переведи или !переведи - перевод текста"""
+    if not is_moderator_or_higher(update.message.from_user.id):
+        await update.message.delete()
+        return
+    
+    if not update.message.reply_to_message or not update.message.reply_to_message.text:
+        await update.message.reply_text("❌ Ответьте на текстовое сообщение для перевода!")
+        await update.message.delete()
+        return
+    
+    # Получаем текст для перевода
+    text_to_translate = update.message.reply_to_message.text
+    
+    if not translator_available:
+        await update.message.reply_text("❌ Переводчик недоступен!")
+        await update.message.delete()
+        return
+    
+    try:
+        # Создаем переводчик
+        translator = Translator()
+        
+        # Определяем язык исходного текста
+        detected = translator.detect(text_to_translate)
+        source_lang = detected.lang
+        source_lang_name = LANGUAGES.get(source_lang, source_lang).capitalize()
+        
+        # Определяем целевой язык
+        if source_lang in ['ru', 'uk', 'be']:  # Русский, Украинский, Белорусский → Английский
+            target_lang = 'en'
+            target_lang_name = "английский"
+        elif source_lang == 'en':  # Английский → Русский
+            target_lang = 'ru'
+            target_lang_name = "русский"
+        else:  # Любой другой язык → Русский
+            target_lang = 'ru'
+            target_lang_name = "русский"
+        
+        # Переводим текст
+        translated = translator.translate(
+            text_to_translate, 
+            src=source_lang, 
+            dest=target_lang
+        )
+        
+        # Формируем ответ
+        if len(text_to_translate) > 100:
+            original_preview = text_to_translate[:100] + "..."
+        else:
+            original_preview = text_to_translate
+        
+        response = (
+            f"🌍 **Перевод**\n\n"
+            f"**С:** {source_lang_name}\n"
+            f"**На:** {target_lang_name}\n\n"
+            f"📝 **Оригинал:**\n`{original_preview}`\n\n"
+            f"✅ **Перевод:**\n`{translated.text}`"
+        )
+        
+        await update.message.reply_text(response, parse_mode='Markdown')
+        
+        # Удаляем команду .переведи
+        await update.message.delete()
+        
+    except Exception as e:
+        print(f"❌ Ошибка перевода: {e}")
+        await update.message.reply_text("❌ Не удалось перевести текст")
+        await update.message.delete()
 
 # ===================== КОМАНДЫ МОДЕРАЦИИ =====================
 async def команда_дел(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -411,8 +491,14 @@ def main():
     
     print(f"📦 Загружено {len(RESPONSES)} автоответов")
     print(f"👑 Создатель ID: {CREATOR_ID}")
-    print("ℹ️ Автоответы работают с любым регистром")
-    print("ℹ️ Знаки препинания в конце игнорируются")
+    
+    if translator_available:
+        print("🌍 Переводчик: ✅ доступен")
+    else:
+        print("🌍 Переводчик: ❌ недоступен (установи googletrans)")
+    
+    print("ℹ️ Команды: .дел .пинг +кик +сс -сс +глсс .садм .салл .переведи")
+    print("=" * 50)
     
     # Бесконечный цикл с переподключением
     while True:
@@ -423,6 +509,8 @@ def main():
             app.add_handler(MessageHandler(filters.Regex(r'^\.дел$'), команда_дел))
             app.add_handler(MessageHandler(filters.Regex(r'^\.пинг$'), команда_пинг))
             app.add_handler(MessageHandler(filters.Regex(r'^\+кик'), команда_кик))
+            app.add_handler(MessageHandler(filters.Regex(r'^\.переведи$') & filters.REPLY, команда_переведи))
+            app.add_handler(MessageHandler(filters.Regex(r'^\!переведи$') & filters.REPLY, команда_переведи))
             
             # КОМАНДЫ УПРАВЛЕНИЯ РАНГАМИ
             app.add_handler(MessageHandler(filters.Regex(r'^\+сс'), команда_плюс_сс))
@@ -436,9 +524,8 @@ def main():
             app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
             
             print("🔥 БОТ ЗАПУЩЕН И РАБОТАЕТ!")
-            print("🧭 Иерархия рангов: Создатель → Главный Админ → Модератор")
             print("📌 Команды работают с: ответами, @username, ID")
-            print("🤖 Автоответы: любой регистр, игнорирует знаки препинания")
+            print("🌍 Переводчик работает с: .переведи или !переведи (ответьте на сообщение)")
             print("\nОжидаю сообщения...\n")
             
             app.run_polling(drop_pending_updates=True, close_loop=False)
