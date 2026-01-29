@@ -65,18 +65,14 @@ async def команда_инфофлуд(update: Update, context: ContextTypes.
         # Получаем информацию о чате
         chat = await context.bot.get_chat(chat_id)
         
-        # Получаем список участников
-        all_members_count = chat.get_member_count()
-        
-        # Считаем ботов (упрощенно)
-        # Можно было бы перебрать всех участников, но это долго для больших чатов
-        # Для точного подсчета нужны права администратора
+        # Получаем количество участников (корутина!)
+        all_members_count = await context.bot.get_chat_member_count(chat_id)
         
         # Отправляем сообщение со статистикой
         message = (
             f"<b>📊 Информация о чате</b>\n\n"
             f"👥 <b>Участники:</b> {all_members_count}\n"
-            f"🤖 <b>Боты:</b> {1} (примерно)\n"
+            f"🤖 <b>Боты:</b> 1 (примерно)\n"
             f"🔗 <b>Ссылка на</b> <a href='https://t.me/lunacyyflood'>инфо</a>"
         )
         
