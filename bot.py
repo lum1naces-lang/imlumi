@@ -17,7 +17,7 @@ CREATOR_ID = 7416252489  # ЗАМЕНИ НА СВОЙ ID!
 # ===================== ХРАНИЛИЩА =====================
 user_ranks = {CREATOR_ID: "creator"}
 
-# Автоответы - реагируют только на ТОЧНОЕ совпадение всего сообщения
+# Автоответы - регистр не важен
 RESPONSES = {
     "правила": "📜 С правилами можно ознакомиться [туть](https://telegra.ph/Rules-01-24-146)",
     "сиси": "Ну, привет... опять ты появляешься. Что на этот раз?",
@@ -26,8 +26,12 @@ RESPONSES = {
     "кто такой этот ваш луми": "АХХ..луми..мой создатель",
     "луми": "Мхх..",
     "бот": "Ну чего тебе?",
-    "Сиси доброй ночи": "Спи или не спи… всё равно ничего не  закончится.",
-    "Сиси доброе утро": "Что в этом утре особенного.."
+    "сиси доброй ночи": "Спи или не спи… всё равно ничего не закончится.",
+    "сиси доброе утро": "Что в этом утре особенного..",
+    "сиси добрый день": "День? Какой ещё день..",
+    "сиси добрый вечер": "Вечер.. снова ты..",
+    "сиси привет": "Опять ты.. чего надо?",
+    "привет сиси": "Ну привет.. что теперь?",
 }
 
 # ===================== СИСТЕМА РАНГОВ =====================
@@ -155,7 +159,7 @@ async def команда_кик(update: Update, context: ContextTypes.DEFAULT_TY
         return
     
     if has_permission(user_id, get_rank(update.message.from_user.id)):
-        await update.message.reply_text("❌ Нельзя кикать пользователя с равным или высшим рангом!")
+        await update.message.reply_text("❌ Нельзя кикать пользователя с равным или высшим ранком!")
         await update.message.delete()
         return
     
@@ -198,7 +202,7 @@ async def команда_плюс_сс(update: Update, context: ContextTypes.DEF
         return
     
     if has_permission(user_id, get_rank(update.message.from_user.id)):
-        await update.message.reply_text("❌ Нельзя назначать ранг пользователю с равным или высшим рангом!")
+        await update.message.reply_text("❌ Нельзя назначать ранг пользователю с равным или высшим ранком!")
         await update.message.delete()
         return
     
@@ -251,7 +255,7 @@ async def команда_минус_сс(update: Update, context: ContextTypes.D
         return
     
     if has_permission(user_id, get_rank(update.message.from_user.id)):
-        await update.message.reply_text("❌ Нельзя снимать ранг пользователю с равным или высшим рангом!")
+        await update.message.reply_text("❌ Нельзя снимать ранг пользователю с равным или высшим ранком!")
         await update.message.delete()
         return
     
@@ -330,32 +334,73 @@ async def команда_салл(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"✅ Сняты все ранги! Удалено: {removed_count} пользователей")
     print(f"🔥 Сняты все ранги, остался только создатель")
 
-# ===================== АВТООТВЕТЫ =====================
+# ===================== УЛУЧШЕННЫЕ АВТООТВЕТЫ =====================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка сообщений - только ТОЧНОЕ совпадение всего сообщения"""
-    text = update.message.text.lower().strip()
+    """
+    Обработка сообщений:
+    - Регистр не важен (Сиси = сиси = СИСИ)
+    - Игнорирует знаки препинания в конце
+    - Реагирует на точное совпадение
+    """
+    original_text = update.message.text.strip()
     
-    # Проверяем точное совпадение (регистр не важен)
-    if text in RESPONSES:
+    # Приводим к нижнему регистру для сравнения
+    text_lower = original_text.lower()
+    
+    # Убираем знаки препинания в конце
+    text_clean = text_lower.rstrip('?!.,;:')
+    
+    # Вариант 1: Точное совпадение с очищенным текстом
+    if text_clean in RESPONSES:
         await update.message.reply_text(
-            RESPONSES[text],
-            parse_mode='Markdown' if text == "правила" else None
+            RESPONSES[text_clean],
+            parse_mode='Markdown' if text_clean == "правила" else None
         )
         return
     
-    # Можно добавить вариант с игнорированием знаков препинания
-    # text_clean = text.rstrip('?!.,;:')
-    # if text_clean in RESPONSES:
-    #     await update.message.reply_text(RESPONSES[text_clean])
-    #     return
+    # Вариант 2: Точное совпадение с оригинальным (нижний регистр)
+    if text_lower in RESPONSES:
+        await update.message.reply_text(
+            RESPONSES[text_lower],
+            parse_mode='Markdown' if text_lower == "правила" else None
+        )
+        return
+    
+    # Вариант 3: Проверяем если сообщение начинается с ключевых слов
+    # (например: "Сиси, привет" → найдет "сиси")
+    first_word = text_clean.split()[0] if text_clean else ""
+    if first_word in ["сиси", "бот", "луми"] and first_word in RESPONSES:
+        await update.message.reply_text(RESPONSES[first_word])
+        return
+    
+    # Вариант 4: Проверяем фразы типа "доброе утро сиси"
+    words = text_clean.split()
+    if len(words) >= 2:
+        # Ищем "сиси" в любом месте и проверяем время суток
+        if "сиси" in words:
+            if "утро" in words or "утра" in words:
+                await update.message.reply_text("Что в этом утре особенного..")
+                return
+            elif "день" in words or "дня" in words:
+                await update.message.reply_text("День? Какой ещё день..")
+                return
+            elif "вечер" in words or "вечера" in words:
+                await update.message.reply_text("Вечер.. снова ты..")
+                return
+            elif "ночь" in words or "ночи" in words or "ночи" in text_clean:
+                await update.message.reply_text("Спи или не спи… всё равно ничего не закончится.")
+                return
+            elif "привет" in words:
+                await update.message.reply_text("Опять ты.. чего надо?")
+                return
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /start"""
-    await update.message.reply_text("Работаю")
+    await update.message.reply_text("🤖 Работаю")
 
 # ===================== ЗАПУСК БОТА =====================
 def main():
-    """Запуск бота"""
+    """Запуск бота с переподключением"""
     print("=" * 50)
     print("🤖 БОТ ЗАПУСКАЕТСЯ")
     print("=" * 50)
@@ -364,9 +409,10 @@ def main():
         print("❌ НЕТ ТОКЕНА! Добавь переменную TOKEN в Railway → Variables")
         return
     
-    print(f"📦 Загружено {len(RESPONSES)} автоответов (точное совпадение)")
+    print(f"📦 Загружено {len(RESPONSES)} автоответов")
     print(f"👑 Создатель ID: {CREATOR_ID}")
-    print("ℹ️ Автоответы сработают только если ВСЁ сообщение равно ключевому слову")
+    print("ℹ️ Автоответы работают с любым регистром")
+    print("ℹ️ Знаки препинания в конце игнорируются")
     
     # Бесконечный цикл с переподключением
     while True:
@@ -392,7 +438,7 @@ def main():
             print("🔥 БОТ ЗАПУЩЕН И РАБОТАЕТ!")
             print("🧭 Иерархия рангов: Создатель → Главный Админ → Модератор")
             print("📌 Команды работают с: ответами, @username, ID")
-            print("🤖 Автоответы: только точное совпадение сообщения")
+            print("🤖 Автоответы: любой регистр, игнорирует знаки препинания")
             print("\nОжидаю сообщения...\n")
             
             app.run_polling(drop_pending_updates=True, close_loop=False)
