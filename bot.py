@@ -6,6 +6,7 @@ import requests
 from datetime import datetime, timedelta
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ContextTypes
+import telegram.error  # Добавьте этот импорт
 
 # ===================== НАСТРОЙКИ =====================
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -303,7 +304,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===================== ЗАПУСК БОТА =====================
 def main():
     print("=" * 50)
-    print("🤖 БОТ ЗАПУСКАЕТСЯ")
+    print(f"🤖 БОТ ЗАПУСКАЕТСЯ | Время: {datetime.now()}")
     print("=" * 50)
     
     if not TOKEN:
@@ -349,8 +350,17 @@ def main():
             print("🍕 Пицца: просто напиши 'пицца' или '.пицца'")
             print("\nОжидаю сообщения...\n")
             
-            app.run_polling(drop_pending_updates=True)
+            # Запуск с параметрами
+            app.run_polling(
+                drop_pending_updates=True,
+                poll_interval=2,  # увеличить интервал опроса
+                timeout=30  # timeout для запросов
+            )
             
+        except telegram.error.Conflict as e:
+            print(f"⚠️ КОНФЛИКТ: Другой экземпляр бота уже запущен!")
+            print(f"🔄 Ожидание 30 секунд перед перезапуском...")
+            time.sleep(30)
         except Exception as e:
             print(f"💥 Ошибка: {e}")
             print("🔄 Перезапуск через 10 секунд...")
