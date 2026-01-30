@@ -6,7 +6,6 @@ import requests
 from datetime import datetime, timedelta
 from telegram import Update, ChatPermissions
 from telegram.ext import Application, MessageHandler, filters, CommandHandler, ContextTypes
-from deep_translator import GoogleTranslator
 
 # ===================== НАСТРОЙКИ =====================
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -77,7 +76,7 @@ async def команда_инфофлуд(update: Update, context: ContextTypes.
             message,
             parse_mode='HTML',
             quote=True,
-            disable_web_page_preview=False
+            disable_web_page_preview=True  # скрывает ссылку снизу
         )
         
         print(f"📊 Отправил инфофлуд для чата {chat_id}")
@@ -85,77 +84,6 @@ async def команда_инфофлуд(update: Update, context: ContextTypes.
     except Exception as e:
         print(f"❌ Ошибка в команде инфофлуд: {e}")
         await update.message.reply_text("❌ Не удалось получить информацию о чате...")
-
-# ===================== КОМАНДА ПЕРЕВОД =====================
-async def команда_перевод(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда '.перевод' или '!перевод' - переводит сообщение, на которое ответили"""
-    try:
-        # Проверяем, является ли сообщение ответом на другое сообщение
-        if not update.message.reply_to_message:
-            await update.message.reply_text(
-                "❌ <b>Ответьте на сообщение для перевода!</b>",
-                parse_mode='HTML',
-                quote=True
-            )
-            return
-        
-        # Получаем текст из сообщения, на которое ответили
-        text_to_translate = update.message.reply_to_message.text or update.message.reply_to_message.caption
-        
-        if not text_to_translate or text_to_translate.strip() == "":
-            await update.message.reply_text(
-                "❌ <b>В сообщении нет текста для перевода!</b>",
-                parse_mode='HTML',
-                quote=True
-            )
-            return
-        
-        text_to_translate = text_to_translate.strip()
-        
-        # Определяем язык оригинала (простая проверка)
-        # Если в тексте есть кириллица - считаем русским, иначе английским
-        has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text_to_translate))
-        
-        try:
-            if has_cyrillic:
-                # Переводим с русского на английский
-                translation = GoogleTranslator(source='ru', target='en').translate(text_to_translate)
-                direction = "ru-en"
-            else:
-                # Переводим с английского на русский
-                translation = GoogleTranslator(source='en', target='ru').translate(text_to_translate)
-                direction = "en-ru"
-            
-            # Формируем ответ в нужном формате
-            response = (
-                f"📝 <b>Перевод текста</b> (<code>{direction}</code>)\n"
-                f"• <b>Оригинал:</b> {text_to_translate}\n"
-                f"• <b>Перевод:</b> {translation}"
-            )
-            
-            await update.message.reply_text(
-                response,
-                parse_mode='HTML',
-                quote=True
-            )
-            
-            print(f"🌍 Перевел текст: {direction} | {text_to_translate[:50]}...")
-            
-        except Exception as translate_error:
-            print(f"❌ Ошибка перевода: {translate_error}")
-            await update.message.reply_text(
-                "❌ <b>Ошибка при переводе. Попробуйте позже.</b>",
-                parse_mode='HTML',
-                quote=True
-            )
-            
-    except Exception as e:
-        print(f"❌ Ошибка в команде перевод: {e}")
-        await update.message.reply_text(
-            "❌ <b>Произошла ошибка при обработке команды.</b>",
-            parse_mode='HTML',
-            quote=True
-        )
 
 # ===================== КОМАНДА ПИЦЦЫ =====================
 async def команда_пицца(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -385,7 +313,6 @@ def main():
     print(f"📦 Загружено {len(RESPONSES)} автоответов")
     print(f"👑 Создатель ID: {CREATOR_ID}")
     print(f"🍕 Гифка пиццы: ✅ загружена")
-    print(f"🌍 Переводчик: ✅ готов к работе")
     print("=" * 50)
     
     while True:
@@ -399,10 +326,6 @@ def main():
             
             # Команда инфофлуд (исправленная)
             app.add_handler(MessageHandler(filters.Regex(r'^\.инфофлуд$'), команда_инфофлуд))
-            
-            # Команда перевода (доступна всем)
-            app.add_handler(MessageHandler(filters.Regex(r'^\.перевод$'), команда_перевод))
-            app.add_handler(MessageHandler(filters.Regex(r'^!перевод$'), команда_перевод))
             
             # Команды рангов
             app.add_handler(MessageHandler(filters.Regex(r'^\+сс'), команда_плюс_сс))
@@ -423,7 +346,6 @@ def main():
             print("🔥 БОТ ЗАПУЩЕН И РАБОТАЕТ!")
             print("🎯 Команды: .дел .пинг +кик +сс -сс +глсс .садм .салл")
             print("📊 Команда: .инфофлуд")
-            print("🌍 Перевод: .перевод или !перевод (ответом на сообщение)")
             print("🍕 Пицца: просто напиши 'пицца' или '.пицца'")
             print("\nОжидаю сообщения...\n")
             
